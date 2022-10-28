@@ -4,15 +4,19 @@ import Error404 from "../Errors/Error404";
 import "./Playlist.scss";
 import HttpClient from "../../Services/Helpers/Api/HttpClient";
 import Url from "../../Services/Helpers/Url/Url";
-import { useAuth0 } from "@auth0/auth0-react";
+import { playerSelector, doPlay,laysources } from "../../Components/Player/playerSlice";
+import { useDispatch, useSelector } from "react-redux";
 
 const client = new HttpClient();
 const url = new Url();
 
+let isFirstLoad = true;
+
 export default function Playlist() {
-  const { user, isAuthenticated } = useAuth0();
   const params = useParams();
+  
   const { id } = params;
+
   const [playlist, setPlaylist] = useState({});
 
   const [songs, setSongs] = useState([]);
@@ -21,7 +25,9 @@ export default function Playlist() {
 
   const [singlePlaylist, setSinglePlaylist] = useState([]);
 
-  const [favourites, setFavourites] = useState(true);
+  const playStatus = useSelector(playerSelector);
+
+  const dispatch = useDispatch();
 
   const getPlaylist = async () => {
     const res = await client.get(client.playlists + "/" + id);
@@ -41,22 +47,31 @@ export default function Playlist() {
           });
 
           if (songIds.length) {
-            const resSongs = await client.get(client.songs + "?" + songIds.join("&"));
-            const resSongSingle = await client.get(
-              client.songSingle + "?" + songIds.join("&").replace(/id/g, "songId") //regex
+            const resSongs = await client.get(
+              client.songs + "?" + songIds.join("&")
             );
+
+            const resSongSingle = await client.get(
+              client.songSingle +
+                "?" +
+                songIds.join("&").replace(/id/g, "songId") //regex
+            );
+
             if (resSongSingle.data.length) {
               let singles = [];
               for (const index in resSongSingle.data) {
                 const { singleId } = resSongSingle.data[index];
-                const resSingle = await client.get(client.single + "/" + singleId);
+                const resSingle = await client.get(
+                  client.single + "/" + singleId
+                );
                 resSongs.data[index].single = resSingle.data;
-
+                
                 singles.push(resSingle.data); //push ca sĩ hát trong cả playlist
               }
 
               singles = singles.filter(
-                (value, index, self) => index === self.findIndex((t) => t.id === value.id)
+                (value, index, self) =>
+                  index === self.findIndex((t) => t.id === value.id)
               );
 
               setSinglePlaylist(singles);
@@ -74,29 +89,18 @@ export default function Playlist() {
       setStatus("404");
     }
   };
-  const postFavourite = async (data) => {
-    const responseLogin = await client.patch(client.playlists, id, data);
-    console.log(responseLogin);
-  };
-  const favourite = (e) => {
-    e.preventDefault();
-    postFavourite({
-      follow: 1,
-    });
-    setFavourites(false);
-  };
-  const favouritedelete = (e) => {
-    e.preventDefault();
-    postFavourite({
-      follow: 0,
-    });
-    setFavourites(true);
-  };
 
   useEffect(() => {
     getPlaylist();
-  }, [favourites]);
+  }, []);
 
+  const handlePlay = () => {
+    isFirstLoad = false;
+    dispatch(doPlay(playStatus?false:true));
+  }
+  const laysource = (source) =>{
+    dispatch(laysources(source));
+  }
   const renderPlaylist = () => {
     let jsx = null;
     if (status === "success") {
@@ -114,12 +118,21 @@ export default function Playlist() {
         );
       });
 
+      let classPlaying = null;
+      if (playStatus){
+        classPlaying = 'playing'
+      }else if (!isFirstLoad && !playStatus){
+        //classPlaying = 'playend';
+      }else{
+        classPlaying = '';
+      }
+
       jsx = (
         <section className="playlist">
           <div className="row">
             <div className="col-3">
               <div className="playlist__image">
-                <img src={playlist.image} />
+                <img className={classPlaying} src={playlist.image} />
               </div>
               <div className="playlist__info">
                 <h2>{playlist.name}</h2>
@@ -128,28 +141,20 @@ export default function Playlist() {
                 <p>{playlist.follow} người yêu thích</p>
               </div>
               <div className="playlist__actions">
-                <button type="button" className="btn btn-primary">
-                  <i className="fa-solid fa-play"></i> Tiếp tục phát
+                <button type="button" className="btn btn-primary" onClick={handlePlay}>
+                  {
+                    playStatus
+                    ? 
+                    <><i className="fa-solid fa-pause"></i> Tạm dừng</>
+                    :
+                    <><i className="fa-solid fa-play"></i> Tiếp tục phát</>
+                  }
+                  
                 </button>
                 <p className="text-center mt-2 favourite">
-                  {isAuthenticated ? (
-                    favourites ? (
-                      <a href="" onClick={favourite}>
-                        <i className="fa-regular fa-heart"></i>
-                      </a>
-                    ) : (
-                      <a href="" onClick={favouritedelete}>
-                        <i className="fa-regular fa-heart" style={{ color: "red" }}></i>
-                      </a>
-                    )
-                  ) : (
-                    <>
-                      <p>Đăng nhập vào rồi ấn</p>
-                      <a btn="submit">
-                        <i className="fa-regular fa-heart"></i>
-                      </a>
-                    </>
-                  )}
+                  <a href="">
+                    <i className="fa-regular fa-heart"></i>
+                  </a>
                 </p>
               </div>
             </div>
@@ -163,17 +168,21 @@ export default function Playlist() {
                 </thead>
                 <tbody>
                   {songs.length ? (
-                    songs.map(({ id, name, duration, image, single }) => {
-                      //console.log(single);
+                    songs.map(({ id, name, duration, image, source, single }) => {
+                      //console.log(source);
                       const { name: singleName, id: singleId } = single;
                       return (
                         <tr key={id}>
                           <td>
                             <div className="playlist--item d-flex">
-                              <img src={image} />
+                              <img onClick={()=>{
+                                laysource(source)
+                              }} src={image} />
                               <span>
                                 <Link to={url.getSong(id)}>{name}</Link>
-                                <Link to={url.getSingle(singleId)}>{singleName}</Link>
+                                <Link to={url.getSingle(singleId)}>
+                                  {singleName}
+                                </Link>
                               </span>
                             </div>
                           </td>

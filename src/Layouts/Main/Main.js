@@ -5,6 +5,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "../../Assets/Styles/Styles.scss";
 import "./Main.scss";
+import Player from "../../Components/Player/Player";
 
 function Main() {
   return (
@@ -20,6 +21,7 @@ function Main() {
           </div>
         </div>
       </div>
+      <Player/>
     </div>
   );
 }
